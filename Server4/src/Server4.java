@@ -8,8 +8,10 @@
  *   Adapted by Gary Allen, March 2002
  */
 
-import java.net.*;
 import java.io.*;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.ArrayList;
 
 public class Server4 {     
     public static void main(String args[]) {
@@ -32,7 +34,7 @@ class MultiThreadServer {
     ServerSocket sock;
     Socket conn;
     int port;
-   
+    private ArrayList<ClientHandler> clientHandlers = new ArrayList<ClientHandler>();
     //  establish server socket and listen for client 
     MultiThreadServer(int port) {
 	this.port = port;
@@ -49,7 +51,8 @@ class MultiThreadServer {
 	while (true) {
 	    try {
 		conn = sock.accept();       //  listen for client connection
-		ClientHandler ch = new ClientHandler(conn);
+            ClientHandler ch = new ClientHandler(conn, clientHandlers);
+            clientHandlers.add(ch);
 		System.out.println("new client connection");
 	    } catch(Exception e) {
 		System.out.println("Error : " + e);
@@ -69,23 +72,47 @@ class ClientHandler implements Runnable {
     BufferedWriter outstream;
     
     String str;
-    
-    ClientHandler(Socket connin) {
-	conn = connin;
-	clientThread = new Thread(this);
-	clientThread.start();
+
+    private ArrayList<ClientHandler> clientHandlers;
+
+    private String name;
+
+    ClientHandler(Socket connin, ArrayList<ClientHandler> clientHandlers) {
+        this.clientHandlers = clientHandlers;
+        conn = connin;
+        clientThread = new Thread(this);
+        clientThread.start();
     } // end ClientHandler constructor
 
-    public void stop() {
+    public void say(String str) {
+        try {
+            outstream.write(str);
+            outstream.newLine();
+            outstream.flush();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void sayToRest(String str) {
+        for (ClientHandler clientHandler : clientHandlers) {
+            if (!this.equals(clientHandler)) {
+                clientHandler.say(str);
+            }
+        }
+    }
+
+    private void stop() {
 	try {
 	    conn.close();
+        clientHandlers.remove(this);
 	}
 	catch(Exception e) {
 	    System.out.println("Error : " + e);
 	}
 	clientThread = null;
     } // end method stop
-    
+
     public void run() {
 	try {
 	    instream = new BufferedReader(new InputStreamReader(conn.getInputStream()));
@@ -103,21 +130,23 @@ class ClientHandler implements Runnable {
 	    System.exit(1);
 	}
 
+        say("Welcome to the server");
+        say("Please enter an alis to use whilst connected");
+
+
 	try {
-	    outstream.write("Your wish is my command . . .");
-	    outstream.newLine();
-	    outstream.flush();
-	} catch(IOException e) {
-	    System.out.println("Error : " + e);
-	    System.exit(1);
-	}
-	
-	do {
+        name = instream.readLine();
+    } catch (IOException e) {
+        e.printStackTrace();
+    }
+
+        say("Welcome to the chat");
+        sayToRest(name + " joined has just joined the chat");
+
+        do {
 	    try {
-		str = instream.readLine();           // wait for client to send data   
-		outstream.write("You said " + str);  // send a reply to client
-		outstream.newLine();
-		outstream.flush();
+            str = instream.readLine();           // wait for client to send data
+            sayToRest(name + ":" + str);
       
 		System.out.print("Client sent string " + str.trim());           
 		System.out.println(" on socket " + conn.toString());
